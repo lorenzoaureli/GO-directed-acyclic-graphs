@@ -1,0 +1,93 @@
+import goatools
+from goatools.obo_parser import GODag
+import numpy as np
+from scipy.stats import spearmanr
+import networkx as nx
+import matplotlib.pyplot as plt
+
+go = GODag("go-basic.obo")
+
+GO_term = "GO:0005515" # insert a Gene ontolofy term 
+
+children_terms = go[GO_term].get_all_children()
+
+
+lists = [str5001, str515, str5184, str5187, str5193, str5195, str5199, str5200, str5208, str524, str5264, str5269, str5273, 
+         str5275, str5277, str5281, str5283, str5307, str5311, str5312, str5313, str5316, str5319, str5320, str5328, str534, 
+         str535, str5401, str5457, str5474, str5485, str5486, str5501, str5506, str5508, str5522, str5536, str5537, str5543, 
+         str5544, str5547, str5737, str5792, str5801, str5806, str5810, str5811, str5816, str5819, str5823, str5874, str5877, 
+         str5882, str5935, str5966, str5985, str6036, str6043, str6059, str6060, str6068, str6074, str6078, str6081, str6082, 
+         str6086, str6096, str6142, str6169, str6180, str6182, str6194, str6196, str6221, str6233, str6237, str6238, str6249, 
+         str6250, str6253, str6256, str6314, str6323, str6327, str6336, str6357, str6388, str6416, str6461, str6464, str6590, 
+         str6595, str670, str690] # insert the lists of GO terms within all genomes
+
+list_values = {'str5001': 16.1, 'str515': 21.3, 'str5184': 15.1, 'str5187': 23.5, 'str5193': 17.2, 'str5195': 15.4, 'str5199': 19.3, 'str5200': 19.3,
+ 'str5208': 16.9, 'str524': 16.2, 'str5264': 2.7, 'str5269': 17.1, 'str5273': 16.5, 'str5275': 15.8, 'str5277': 13.9, 'str5281': 14.3,
+ 'str5283': 13.8, 'str5307': 13.7, 'str5311': 14.1, 'str5312': 2.2, 'str5313': 2.0, 'str5316': 2.5, 'str5319': 2.2, 'str5320': 0.8,
+ 'str5328': 15.9, 'str534': 21.4, 'str535': 21.7, 'str5401': 0.4, 'str5457': 0.667, 'str5474': 2.1, 'str5485': 2.1, 'str5486': 13.4,
+ 'str5501': 1.7, 'str5506': 0.8, 'str5508': 0.7, 'str5522': 1.4, 'str5536': 1.7, 'str5537': 0.8, 'str5543': 0.8, 'str5544': 0.8, 
+ 'str5547': 0.8, 'str5737': 3.9, 'str5792': 0.8, 'str5801': 0.9, 'str5806': 0.5, 'str5810': 0.9, 'str5811': 0.8, 'str5816': 0.4,
+ 'str5819': 1.1, 'str5823': 0.5, 'str5874': 0.7, 'str5877': 0.4, 'str5882': 0.7, 'str5935': 1.3, 'str5966': 0.9, 'str5985': 0.4,
+ 'str6036': 0.8, 'str6043': 0.4, 'str6059': 0.5, 'str6060': 0.8, 'str6068': 0.5, 'str6074': 17.5, 'str6078': 16.4, 'str6081': 16.2,
+ 'str6082': 19.9, 'str6086': 2.3, 'str6096': 16.2, 'str6142': 1.0, 'str6169': 0.3, 'str6180': 1.4, 'str6182': 1.2, 'str6194': 1.0,
+ 'str6196': 1.3, 'str6221': 0.6, 'str6233': 0.7, 'str6237': 1.3, 'str6238': 1.3, 'str6249': 16.7, 'str6250': 20.5, 'str6253': 1.5,
+ 'str6256': 1.3, 'str6314': 0.4, 'str6323': 2.7, 'str6327': 0.4, 'str6336': 1.0, 'str6357': 0.4, 'str6388': 0.3, 'str6416': 21.7,
+ 'str6461': 20.8, 'str6464': 16.7, 'str6590': 1.3, 'str6595': 1.7, 'str670': 15.1, 'str690': 21.5} # insert D10 values of all sthe strains
+
+G = nx.DiGraph()
+
+def add_children(term):
+    counts = []
+    for item in lists:
+        total_number = len(item)
+        count = item.count(str(term))
+        relative_count = count / total_number
+        counts.append(relative_count)
+    if sum(counts) > 0: # Only get nodes whose sum of frequencies is higher than 0
+        level = go[term].depth
+
+        x = list(list_values.values())
+        y = counts
+        correlation, p_value = spearmanr(x, y)
+        
+        G.add_node(go[term].id, size=abs(correlation), pvalue=p_value) # Size depends on Spearman correlation coefficient
+        print(str(term) + ": " + str(correlation) + str(counts) + " p-value: " + str(p_value))
+        
+        for child_term in go[term].children:
+            child_counts = []
+            for item in lists:
+                total_number = len(item)
+                count = item.count(str(child_term.id))
+                relative_count = count / total_number
+                child_counts.append(relative_count)
+            if sum(child_counts) > 0:
+                add_children(child_term.id)
+                G.add_edge(term, child_term.id)
+        
+        
+add_children(GO_term)
+
+node_colors = []
+for node in G.nodes():
+    if node == GO_term:
+        node_colors.append("blue")
+    elif G.nodes[node].get('pvalue', 1) > 0.05:
+        node_colors.append("white")
+    else:
+        node_colors.append("red")
+        
+pos = nx.spring_layout(G)
+
+plt.figure(figsize=(41, 48))
+pos = nx.nx_agraph.graphviz_layout(G, prog='dot')
+node_sizes = [G.nodes[node].get('size', 1) * 4000 for node in G.nodes()]
+for node in G.nodes():
+    if node == GO_term:
+        node_sizes[list(G.nodes).index(node)] *= 5
+nx.draw(G, pos, node_size=node_sizes, alpha=0.5, node_color=node_colors, font_size=8, with_labels=True, edgecolors='red', edge_color='#C0C0C0', font_weight='bold')
+
+
+#plt.savefig("test.pdf")
+
+
+plt.show()
