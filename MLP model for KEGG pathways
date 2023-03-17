@@ -1,0 +1,101 @@
+import pandas as pd
+import numpy as np
+from numpy import loadtxt
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from keras.utils import to_categorical
+from tensorflow.keras.layers import Dropout
+from scipy.special import softmax
+
+
+df = pd.read_excel("../Dati genomici/kegg_pathways.xlsx") # dataframe containing counts of KEGG pathways
+
+# MLP model
+
+seed_value = 42
+np.random.seed(seed_value)
+random.seed(seed_value)
+tf.random.set_seed(seed_value)
+
+# Create dictionary to map radioresistance categories to integer values
+resistance_map = {"low": 0, "mid": 1, "high": 2}
+
+# Apply mapping to the 'Resistance' column
+df['Resistance'] = df['Resistance'].map(resistance_map)
+
+
+# split into input (X) and output (y) variables
+X = df.iloc[:, 2:].values
+y = to_categorical(df['Resistance'].values)
+
+
+# define the keras model (here classification model)
+model = Sequential()
+model.add(Dense(256, input_shape=(843,), activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(3, activation='softmax'))
+    
+# compile the keras model
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# fit the keras model on the dataset
+model.fit(X, y, epochs=150, batch_size=10, verbose=0)
+
+# make class predictions with the model
+predictions = model.predict(X)
+predictions = np.argmax(predictions, axis=1)
+# summarize the first 5 cases
+for i in range(30):
+    print('%s => %d (expected %d)' % (X[i].tolist(), predictions[i], np.argmax(y[i])))
+        
+ _, accuracy = model.evaluate(X, y)
+print('Accuracy: %.2f' % (accuracy*100))
+
+
+
+# Most important variables through SHAP 
+
+# creates an instance of the explainer, passing in the model and the input data, X, to the constructor
+explainer = shap.DeepExplainer(model, X)
+# calculates the SHAP values for each feature for each sample in the input data
+shap_values = explainer.shap_values(X)
+
+shap.summary_plot(shap_values[0], plot_type = 'bar', feature_names = df.iloc[:, 2:].columns, show=False)
+
+plt.title('Relative Importance of KEGG pathways in radioresistance')
+
+plt.savefig('seed_value_110.pdf', bbox_inches='tight')
+
+
+# feature importances as the mean average value for each feature
+def print_feature_importances_shap_values(shap_values, features):
+    '''
+    Prints the feature importances based on SHAP values in an ordered way
+    shap_values -> The SHAP values calculated from a shap.DeepExplainer object
+    features -> The name of the features, on the order presented to the explainer
+    '''
+    # Calculates the feature importance (mean absolute shap value) for each feature
+    importances = []
+    for i in range(shap_values[0].shape[1]):
+        feature_importance = 0
+        for j in range(len(shap_values)):
+            feature_importance += np.mean(np.abs(shap_values[j][:, i]))
+        importances.append(feature_importance / len(shap_values))
+    # Calculates the normalized version
+    importances_norm = softmax(importances)
+    # Organize the importances and columns in a dictionary
+    feature_importances = {fea: imp for imp, fea in zip(importances, features)}
+    feature_importances_norm = {fea: imp for imp, fea in zip(importances_norm, features)}
+    # Sorts the dictionary
+    feature_importances = {k: v for k, v in sorted(feature_importances.items(), key=lambda item: item[1], reverse = True)}
+    feature_importances_norm= {k: v for k, v in sorted(feature_importances_norm.items(), key=lambda item: item[1], reverse = True)}
+    # Prints the feature importances
+    for k, v in feature_importances.items():
+        print(f"{k} -> {v:.4f} (softmax = {feature_importances_norm[k]:.4f})")
